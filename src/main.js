@@ -10,51 +10,66 @@ const searchForm = document.forms.searchForm;
 const inp = searchForm.elements.input;
 const submitBtn = searchForm.elements.submitButton;
 const outputList = document.querySelector('.general-list');
-
 const moreBtn = document.querySelector('button[data-more]');
-const loader = document.createElement('span');
-loader.classList.add('loader');
+const loader = document.getElementById('loader');
 const elemsPerPage = 15;
 let pageNumber;
 let inpVal;
 
-async function handleRequest(value, page) {
-  main.append(loader);
-  moreBtn.hidden = true;
-  const photosArr = await fetchRequest(value, page);
-  loader.remove();
-  if (!photosArr.hits.length) {
-    throw new Error(
-      'Sorry, there are no images matching your search query. Please, try again'
-    );
-  }
-
-  const markup = drawMarkup(photosArr.hits);
-  if (page === 1) outputList.innerHTML = markup;
-  else outputList.insertAdjacentHTML('beforeend', markup);
-  lightboxGallery.refresh();
-
-  if (page * elemsPerPage >= photosArr.totalHits) {
-    throw new Error(
-      "We're sorry, but you've reached the end of search results."
-    );
-  }
-  moreBtn.hidden = false;
-  pageNumber += 1;
+function showLoader() {
+  loader.classList.remove('hidden');
 }
 
-submitBtn.addEventListener('click', async e => {
+function hideLoader() {
+  loader.classList.add('hidden');
+}
+
+async function handleRequest(value, page) {
+  showLoader();
+  moreBtn.hidden = true;
+
+  try {
+    const photosArr = await fetchRequest(value, page);
+    if (!photosArr.hits.length) {
+      throw new Error(
+        'Sorry, there are no images matching your search query. Please, try again'
+      );
+    }
+
+    const markup = drawMarkup(photosArr.hits);
+    if (page === 1) outputList.innerHTML = markup;
+    else outputList.insertAdjacentHTML('beforeend', markup);
+
+    lightboxGallery.refresh();
+
+    // Перевіряємо, чи потрібно показувати кнопку "Load more"
+    if (page * elemsPerPage >= photosArr.totalHits) {
+      moreBtn.hidden = true;
+      iziToast.info({
+        message: "We're sorry, but you've reached the end of search results.",
+        position: 'topRight',
+      });
+    } else {
+      moreBtn.hidden = false;
+      pageNumber += 1;
+    }
+  } finally {
+    hideLoader();
+  }
+}
+
+submitBtn.addEventListener('click', async (e) => {
   e.preventDefault();
   inpVal = inp.value.trim();
-  if (!inpVal) {
-    return;
-  }
+  if (!inpVal) return;
+
   submitBtn.disabled = true;
   pageNumber = 1;
+  outputList.innerHTML = ''; // Очищаємо попередні результати
+
   try {
     await handleRequest(inpVal, pageNumber);
   } catch (error) {
-    outputList.innerHTML = '';
     iziToast.error({
       message: error.message,
       position: 'topRight',
@@ -81,6 +96,7 @@ moreBtn.addEventListener('click', async () => {
     submitBtn.disabled = false;
   }
 });
+
 const lightboxGallery = new SimpleLightbox('.general-list a', {
   captionsData: 'alt',
   captionDelay: 250,
